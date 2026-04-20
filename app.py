@@ -23,7 +23,7 @@ TASKS = {
         "title": "Horse ↔ Zebra",
         "description": "Translate horse photos into zebras and zebra photos into horses.",
         "button_label": "Open Horse ↔ Zebra",
-        "checkpoint_path": "./runs/horse2zebra/checkpoints/best.pt",
+        "checkpoint_path": "./horses_best.pt",
         "model_params": {
             "img_channels_a": 3,
             "img_channels_b": 3,
@@ -35,13 +35,14 @@ TASKS = {
         },
         "domain_a_name": "Horse",
         "domain_b_name": "Zebra",
-        "preview_image": "./app_assets/horse2zebra_preview.png",
+        "preview_image_a": "./horse_preview.png",
+        "preview_image_b": "./zebra_preview.png",
     },
     "face2cartoon": {
         "title": "Sketch Face ↔ Cartoon Face",
         "description": "Translate pencil face sketches into colored cartoon faces and back.",
         "button_label": "Open Sketch ↔ Cartoon",
-        "checkpoint_path": "./runs/sketch2cartoon_faces/checkpoints/best.pt",
+        "checkpoint_path": "./faces_best.pt",
         "model_params": {
             "img_channels_a": 3,
             "img_channels_b": 3,
@@ -53,7 +54,8 @@ TASKS = {
         },
         "domain_a_name": "Sketch Face",
         "domain_b_name": "Cartoon Face",
-        "preview_image": "./app_assets/sketch2cartoon_preview.png",
+        "preview_image_a": "./sketch_face_preview.png",
+        "preview_image_b": "./cartoon_face_preview.png",
     },
 }
 
@@ -66,15 +68,6 @@ def build_transform(image_size: int):
     ])
 
 
-def tensor_to_pil(image_tensor: torch.Tensor) -> Image.Image:
-    image_tensor = image_tensor.detach().cpu().clone()
-    image_tensor = image_tensor * 0.5 + 0.5
-    image_tensor = image_tensor.clamp(0, 1)
-    image_array = image_tensor.permute(1, 2, 0).numpy()
-    image_array = (image_array * 255).astype(np.uint8)
-    return Image.fromarray(image_array)
-
-
 @st.cache_resource(show_spinner=False)
 def load_model(task_key: str):
     task = TASKS[task_key]
@@ -83,7 +76,7 @@ def load_model(task_key: str):
     if not checkpoint_path.exists():
         raise FileNotFoundError(
             f"Checkpoint not found: {checkpoint_path}. "
-            f"Update checkpoint_path in TASKS inside streamlit_app.py."
+            f"Update checkpoint_path in TASKS inside the Streamlit file."
         )
 
     model = CycleGAN(**task["model_params"]).to(DEVICE)
@@ -91,6 +84,15 @@ def load_model(task_key: str):
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
     return model
+
+
+def tensor_to_pil(image_tensor: torch.Tensor) -> Image.Image:
+    image_tensor = image_tensor.detach().cpu().clone()
+    image_tensor = image_tensor * 0.5 + 0.5
+    image_tensor = image_tensor.clamp(0, 1)
+    image_array = image_tensor.permute(1, 2, 0).numpy()
+    image_array = (image_array * 255).astype(np.uint8)
+    return Image.fromarray(image_array)
 
 
 def run_translation(task_key: str, uploaded_file, direction: str):
@@ -119,6 +121,27 @@ def select_task(task_key: str):
     st.session_state["selected_task"] = task_key
 
 
+def render_preview_pair(task: dict):
+    left, right = st.columns(2)
+
+    preview_a = Path(task["preview_image_a"])
+    preview_b = Path(task["preview_image_b"])
+
+    with left:
+        st.caption(task["domain_a_name"])
+        if preview_a.exists():
+            st.image(str(preview_a), use_container_width=True)
+        else:
+            st.info(f"Add preview image here:\n\n`{preview_a}`")
+
+    with right:
+        st.caption(task["domain_b_name"])
+        if preview_b.exists():
+            st.image(str(preview_b), use_container_width=True)
+        else:
+            st.info(f"Add preview image here:\n\n`{preview_b}`")
+
+
 def render_home():
     st.title("CycleGAN Translators")
     st.write("Choose which translator you want to use.")
@@ -130,14 +153,7 @@ def render_home():
         task = TASKS[task_key]
         with col:
             st.subheader(task["title"])
-            preview_path = Path(task["preview_image"])
-            if preview_path.exists():
-                st.image(str(preview_path), use_container_width=True)
-            else:
-                st.info(
-                    "Add your own preview image here:\n\n"
-                    f"`{preview_path}`"
-                )
+            render_preview_pair(task)
             st.write(task["description"])
             st.button(
                 task["button_label"],
